@@ -17,18 +17,22 @@ module tb ();
   reg clk;
   reg rst_n;
   reg ena;
-  reg [7:0] ui_in;
+  wire [7:0] ui_in = {we, bank_sel, addr};
   reg [7:0] uio_in;
   wire [7:0] uo_out;
   wire [7:0] uio_out;
   wire [7:0] uio_oe;
+
+  reg [5:0] addr;
+  reg bank_sel;
+  reg we;
 `ifdef GL_TEST
   wire VPWR = 1'b1;
   wire VGND = 1'b0;
 `endif
 
   // Replace tt_um_example with your module name:
-  tt_um_example user_project (
+  tt_um_collosal_demo user_project (
 
       // Include power ports for the Gate Level test:
 `ifdef GL_TEST

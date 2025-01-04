@@ -7,34 +7,155 @@ from cocotb.triggers import ClockCycles
 
 
 @cocotb.test()
-async def test_project(dut):
+async def test_collosal_mem(dut):
     dut._log.info("Start")
-
-    # Set the clock period to 10 us (100 KHz)
     clock = Clock(dut.clk, 10, units="us")
     cocotb.start_soon(clock.start())
 
-    # Reset
-    dut._log.info("Reset")
+    dut._log.info("Enable")
     dut.ena.value = 1
-    dut.ui_in.value = 0
     dut.uio_in.value = 0
+    dut.bank_sel.value = 0
+
+    dut._log.info("Reset")
     dut.rst_n.value = 0
     await ClockCycles(dut.clk, 10)
+
     dut.rst_n.value = 1
+    await ClockCycles(dut.clk, 2)
 
-    dut._log.info("Test project behavior")
+    # All the bidirectional ports are used for the uio_in signal, so they should be inputs
+    assert int(dut.uio_oe.value) == 0
 
-    # Set the input values you want to test
-    dut.ui_in.value = 20
-    dut.uio_in.value = 30
-
-    # Wait for one clock cycle to see the output values
+    dut._log.info("Write 4 bytes to addresses 8, 9, 10, 11")
+    dut.addr.value = 8
+    dut.uio_in.value = 0x55
+    dut.we.value = 1
     await ClockCycles(dut.clk, 1)
 
-    # The following assersion is just an example of how to check the output values.
-    # Change it to match the actual expected output of your module:
-    assert dut.uo_out.value == 50
+    dut.addr.value = 9
+    dut.uio_in.value = 0x66
+    dut.we.value = 1
+    await ClockCycles(dut.clk, 1)
 
-    # Keep testing the module by changing the input values, waiting for
-    # one or more clock cycles, and asserting the expected output values.
+    dut.addr.value = 10
+    dut.uio_in.value = 0x77
+    dut.we.value = 1
+    await ClockCycles(dut.clk, 1)
+
+    dut.addr.value = 11
+    dut.uio_in.value = 0x88
+    dut.we.value = 1
+    await ClockCycles(dut.clk, 1)
+
+    dut._log.info("Read back the bytes and verify they are correct")
+    dut.uio_in.value = 0
+    dut.addr.value = 8
+    dut.we.value = 0
+    await ClockCycles(dut.clk, 2)
+    assert int(dut.uo_out.value) == 0x55
+
+    dut.addr.value = 9
+    await ClockCycles(dut.clk, 2)
+    assert int(dut.uo_out.value) == 0x66
+
+    dut.addr.value = 10
+    await ClockCycles(dut.clk, 2)
+    assert int(dut.uo_out.value) == 0x77
+
+    dut.addr.value = 11
+    await ClockCycles(dut.clk, 2)
+    assert int(dut.uo_out.value) == 0x88
+
+    dut._log.info("Write a byte at address 12")
+    dut.addr.value = 12
+    dut.uio_in.value = 0x99
+    dut.we.value = 1
+    await ClockCycles(dut.clk, 1)
+
+    dut._log.info("Overwrite the byte at address 10")
+    dut.addr.value = 10
+    dut.uio_in.value = 0xaa
+    dut.we.value = 1
+    await ClockCycles(dut.clk, 1)
+
+    dut._log.info("Read back the bytes and verify they are correct")
+    dut.uio_in.value = 0
+    dut.we.value = 0
+    dut.addr.value = 12
+    await ClockCycles(dut.clk, 2)
+    assert int(dut.uo_out.value) == 0x99
+
+    dut.addr.value = 10
+    await ClockCycles(dut.clk, 2)
+    assert int(dut.uo_out.value) == 0xaa
+
+    dut.addr.value = 8
+    await ClockCycles(dut.clk, 2)
+    assert int(dut.uo_out.value) == 0x55
+
+    dut._log.info("Switch to bank 3 and write a byte at addresses 10, 11")
+    dut.uio_in.value = 3
+    dut.bank_sel.value = 1
+    await ClockCycles(dut.clk, 1)
+
+    dut.bank_sel.value = 0
+    dut.addr.value = 10
+    dut.uio_in.value = 0xbb
+    dut.we.value = 1
+    await ClockCycles(dut.clk, 1)
+
+    dut.bank_sel.value = 0
+    dut.addr.value = 11
+    dut.uio_in.value = 0xcc
+    dut.we.value = 1
+    await ClockCycles(dut.clk, 1)
+
+    dut._log.info("Read back the bytes and verify they are correct")
+    dut.uio_in.value = 0
+    dut.addr.value = 10
+    dut.we.value = 0
+    await ClockCycles(dut.clk, 2)
+    assert int(dut.uo_out.value) == 0xbb
+
+    dut._log.info("Switch to bank 0 and verify the byte at address 10 is still correct")
+
+    dut.uio_in.value = 0
+    dut.bank_sel.value = 1
+    await ClockCycles(dut.clk, 1)
+
+    dut.bank_sel.value = 0
+    dut.addr.value = 10
+    await ClockCycles(dut.clk, 2)
+    assert int(dut.uo_out.value) == 0xaa
+
+    dut._log.info("Bank select and read back the byte at addresses 11, 10")
+    dut.uio_in.value = 3
+    dut.bank_sel.value = 1
+    dut.addr.value = 11
+    await ClockCycles(dut.clk, 2)
+    assert int(dut.uo_out.value) == 0xcc
+
+    dut.bank_sel.value = 0
+    dut.uio_in.value = 0
+    dut.addr.value = 10
+    await ClockCycles(dut.clk, 2)
+    assert int(dut.uo_out.value) == 0xbb
+
+    dut._log.info("Chaning the bank while bank_sel is high and verify the data")
+
+    dut.uio_in.value = 0
+    dut.bank_sel.value = 1
+    dut.addr.value = 10
+    await ClockCycles(dut.clk, 2)
+    assert int(dut.uo_out.value) == 0xaa
+
+    dut.uio_in.value = 3
+    await ClockCycles(dut.clk, 2)
+    assert int(dut.uo_out.value) == 0xbb
+
+    dut.uio_in.value = 0
+    await ClockCycles(dut.clk, 2)
+    assert int(dut.uo_out.value) == 0xaa
+
+    dut._log.info("All good!")
